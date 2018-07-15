@@ -6,9 +6,9 @@ import warnings
 from distutils.version import LooseVersion
 import project_tests as tests
 
-
 # Check TensorFlow Version
-assert LooseVersion(tf.__version__) >= LooseVersion('1.0'), 'Please use TensorFlow version 1.0 or newer.  You are using {}'.format(tf.__version__)
+assert LooseVersion(tf.__version__) >= LooseVersion(
+    '1.0'), 'Please use TensorFlow version 1.0 or newer.  You are using {}'.format(tf.__version__)
 print('TensorFlow Version: {}'.format(tf.__version__))
 
 # Check for a GPU
@@ -33,8 +33,22 @@ def load_vgg(sess, vgg_path):
     vgg_layer3_out_tensor_name = 'layer3_out:0'
     vgg_layer4_out_tensor_name = 'layer4_out:0'
     vgg_layer7_out_tensor_name = 'layer7_out:0'
-    
-    return None, None, None, None, None
+
+    # Using tf.saved_model.loader.load to load the vgg model based on its attributes
+    tf.saved_model.loader.load(sess=sess, tags=[vgg_tag], export_dir=vgg_path)
+
+    # We need to return the names of the vgg layer, so we get the default graph and use (get_tensor_by_name) function
+    graph = tf.get_default_graph()
+    input_layer = graph.get_tensor_by_name(vgg_input_tensor_name)
+    keep_prob = graph.get_tensor_by_name(vgg_keep_prob_tensor_name)
+    layer3 = graph.get_tensor_by_name(vgg_layer3_out_tensor_name)
+    layer4 = graph.get_tensor_by_name(vgg_layer4_out_tensor_name)
+    layer7 = graph.get_tensor_by_name(vgg_layer7_out_tensor_name)
+
+    # Return a tuple of the loaded layers from vgg16 model
+    return input_layer, keep_prob, layer3, layer4, layer7
+
+
 tests.test_load_vgg(load_vgg, tf)
 
 
@@ -48,7 +62,61 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     :return: The Tensor for the last layer of output
     """
     # TODO: Implement function
-    return None
+    # Define the L2 Regularization value in order to use it in the following layers
+    weights_L2_Regularizer = 1e-3
+
+    '''
+    Layer 7 CONV_1x1 and Upsampling
+    '''
+    # 1x1 Convolution for vgg_16 7th layer in order to reduce the depth to be num_classes
+    conv_1x1_layer7 = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, padding="SAME",
+                                       kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
+                                       name="conv_1x1_layer7")
+
+    # Upsampling layer for the output of the previous layer conv_1x1_layer7
+    deconv_layer7 = tf.layers.conv2d_transpose(conv_1x1_layer7, num_classes, 4, strides=(2, 2), padding="SAME",
+                                               kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
+                                               name="Deconv_layer7")
+
+
+
+
+    '''
+    Layer 4 CONV_1x1, Skip Connection and Upsampling
+    '''
+    # 1x1 Convolution for vgg_16 4th layer
+    conv_1x1_layer4 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, padding="SAME",
+                                       kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
+                                       name="conv_1x1_layer4")
+
+    # Before the upsampling, we should add the skip connections first
+    Skip_Connection_1 = tf.add(conv_1x1_layer4, deconv_layer7, name="Skip_Connection_1")
+
+    # Upsampling layer for the output of the previous layer conv_1x1_layer7
+    deconv_layer4 = tf.layers.conv2d_transpose(Skip_Connection_1, num_classes, 4, strides=(2, 2), padding="SAME",
+                                               kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
+                                               name="Deconv_layer4")
+
+    '''
+    Layer 4 CONV_1x1, Skip Connection and Upsampling
+    '''
+    # 1x1 Convolution for vgg_16 3rd layer
+    conv_1x1_layer3 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, padding="SAME",
+                                       kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
+                                       name="conv_1x1_layer3")
+
+    # Before the upsampling, we should add the skip connections first
+    Skip_Connection_2 = tf.add(conv_1x1_layer3, deconv_layer4, name="Skip_Connection_2")
+
+    # Upsampling layer for the output of the previous layer conv_1x1_layer7
+    deconv_layer3 = tf.layers.conv2d_transpose(Skip_Connection_2, num_classes, 16, strides=(8, 8), padding="SAME",
+                                               kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
+                                               name="Deconv_layer3")
+
+    # Return th eoutput of the model
+    return deconv_layer3
+
+
 tests.test_layers(layers)
 
 
@@ -62,7 +130,23 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :return: Tuple of (logits, train_op, cross_entropy_loss)
     """
     # TODO: Implement function
-    return None, None, None
+    # Reshape the NN output (logits) and labels to be a 2D instead of having 4D tensor
+    logits = tf.reshape(nn_last_layer, (-1, num_classes))
+    labels = tf.reshape(correct_label, (-1, num_classes))
+
+    # Create the Loss Function that will be passed to the Optimizer
+    Loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels))
+
+    # Define Adam optimizer to be used
+    Optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name="Adam")
+
+    # Apply OPtimizer to the Loss Function
+    train_op = Optimizer.minimize(loss=Loss,name="Optimization")
+
+    # Return tuple of the logits, train_op, and cross entropy loss
+    return logits, train_op, Loss
+
+
 tests.test_optimize(optimize)
 
 
@@ -82,7 +166,28 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param learning_rate: TF Placeholder for learning rate
     """
     # TODO: Implement function
-    pass
+    # Run the global variables initializers
+    sess.run(tf.global_variables_initializer())
+
+    # For each epoch, we will iterate through the batches based on the batch_size
+    for epoch in range(epochs):
+        print("Epoch (",epoch,"): ")
+        loss_log = []
+        for image, label in get_batches_fn(batch_size):
+            # Prepare the feed_dict that will be used in the sess.run
+            feed_dict = {input_image:image, correct_label:label, keep_prob:keep_prob, learning_rate:learning_rate}
+            # Run the session based on the previous feed_dict attributes
+            _, loss = sess.run([train_op, cross_entropy_loss], feed_dict=feed_dict)
+
+            loss_log.append(loss)
+        # Printing loss values for each epoch
+        print("     loss = ", loss_log)
+        # Going to the Next line in the following epoch
+        print()
+    print("Training Finished...")
+
+
+
 tests.test_train_nn(train_nn)
 
 
