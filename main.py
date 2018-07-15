@@ -215,6 +215,14 @@ def run():
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
 
         # TODO: Build NN using load_vgg, layers, and optimize function
+        # We need to create placholders for correct_label and learning rate which are needed in optimize function
+        correct_label = tf.placeholder(tf.int32, shape=[None,None,None, num_classes], name="Correct_Label")
+        learning_rate = tf.placeholder(tf.float32, shape=None, name="Learning_Rate")
+
+        # Calling the functions that we have created previously
+        input_image, keep_prob, layer3_out, layer4_out, layer7_out = load_vgg(sess=sess,vgg_path=vgg_path)
+        final_layer_output = layers(vgg_layer3_out=layer3_out, vgg_layer4_out=layer4_out, vgg_layer7_out=layer7_out, num_classes=num_classes)
+        logits, train_op, Loss = optimize(nn_last_layer=final_layer_output,correct_label=correct_label,learning_rate=learning_rate, num_classes=num_classes)
 
         # TODO: Train NN using the train_nn function
 
