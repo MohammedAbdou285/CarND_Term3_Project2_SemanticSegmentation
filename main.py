@@ -35,7 +35,7 @@ def load_vgg(sess, vgg_path):
     vgg_layer7_out_tensor_name = 'layer7_out:0'
 
     # Using tf.saved_model.loader.load to load the vgg model based on its attributes
-    tf.saved_model.loader.load(sess=sess, tags=[vgg_tag], export_dir=vgg_path)
+    tf.saved_model.loader.load(sess, [vgg_tag], vgg_path)
 
     # We need to return the names of the vgg layer, so we get the default graph and use (get_tensor_by_name) function
     graph = tf.get_default_graph()
@@ -175,7 +175,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
         loss_log = []
         for image, label in get_batches_fn(batch_size):
             # Prepare the feed_dict that will be used in the sess.run
-            feed_dict = {input_image:image, correct_label:label, keep_prob:keep_prob, learning_rate:learning_rate}
+            feed_dict = {input_image:image, correct_label:label, keep_prob:0.5, learning_rate:1e-5}
             # Run the session based on the previous feed_dict attributes
             _, loss = sess.run([train_op, cross_entropy_loss], feed_dict=feed_dict)
 
@@ -193,6 +193,11 @@ tests.test_train_nn(train_nn)
 
 def run():
     num_classes = 2
+
+    # Define number of epochs and batch sizes: parameters to be tuned
+    num_epochs = 50
+    batch_size = 4
+
     image_shape = (160, 576)
     data_dir = './data'
     runs_dir = './runs'
@@ -221,13 +226,21 @@ def run():
 
         # Calling the functions that we have created previously
         input_image, keep_prob, layer3_out, layer4_out, layer7_out = load_vgg(sess=sess,vgg_path=vgg_path)
-        final_layer_output = layers(vgg_layer3_out=layer3_out, vgg_layer4_out=layer4_out, vgg_layer7_out=layer7_out, num_classes=num_classes)
-        logits, train_op, Loss = optimize(nn_last_layer=final_layer_output,correct_label=correct_label,learning_rate=learning_rate, num_classes=num_classes)
+        final_layer_output = layers(vgg_layer3_out=layer3_out, vgg_layer4_out=layer4_out, vgg_layer7_out=layer7_out,
+                                    num_classes=num_classes)
+        logits, train_op, Loss = optimize(nn_last_layer=final_layer_output,correct_label=correct_label,
+                                          learning_rate=learning_rate, num_classes=num_classes)
 
         # TODO: Train NN using the train_nn function
+        # Saving the model for the inference
+        saver = tf.train.Saver()
+        # Calling the function of training
+        train_nn(sess=sess, epochs=num_epochs, batch_size=batch_size, get_batches_fn=get_batches_fn, train_op=train_op,
+                 cross_entropy_loss=Loss, input_image=input_image, correct_label=correct_label, keep_prob=keep_prob,
+                 learning_rate=learning_rate)
 
         # TODO: Save inference data using helper.save_inference_samples
-        #  helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
+        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
 
         # OPTIONAL: Apply the trained model to a video
 
