@@ -64,17 +64,20 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     # TODO: Implement function
     # Define the L2 Regularization value in order to use it in the following layers
     weights_L2_Regularizer = 1e-3
+    weightes_initialization_stdev = 0.01
 
     '''
     Layer 7 CONV_1x1 and Upsampling
     '''
     # 1x1 Convolution for vgg_16 7th layer in order to reduce the depth to be num_classes
     conv_1x1_layer7 = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, padding="SAME",
+                                        kernel_initializer = tf.random_normal_initializer(stddev=weightes_initialization_stdev),
                                        kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
                                        name="conv_1x1_layer7")
 
     # Upsampling layer for the output of the previous layer conv_1x1_layer7
     deconv_layer7 = tf.layers.conv2d_transpose(conv_1x1_layer7, num_classes, 4, strides=(2, 2), padding="SAME",
+                                            kernel_initializer = tf.random_normal_initializer(stddev=weightes_initialization_stdev),
                                                kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
                                                name="Deconv_layer7")
 
@@ -87,6 +90,7 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     # 1x1 Convolution for vgg_16 4th layer
     conv_1x1_layer4 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, padding="SAME",
                                        kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
+                                       kernel_initializer = tf.random_normal_initializer(stddev=weightes_initialization_stdev),
                                        name="conv_1x1_layer4")
 
     # Before the upsampling, we should add the skip connections first
@@ -95,6 +99,7 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     # Upsampling layer for the output of the previous layer conv_1x1_layer7
     deconv_layer4 = tf.layers.conv2d_transpose(Skip_Connection_1, num_classes, 4, strides=(2, 2), padding="SAME",
                                                kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
+                                               kernel_initializer = tf.random_normal_initializer(stddev=weightes_initialization_stdev),
                                                name="Deconv_layer4")
 
     '''
@@ -102,6 +107,7 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     '''
     # 1x1 Convolution for vgg_16 3rd layer
     conv_1x1_layer3 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, padding="SAME",
+                                        kernel_initializer = tf.random_normal_initializer(stddev=weightes_initialization_stdev),
                                        kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
                                        name="conv_1x1_layer3")
 
@@ -110,6 +116,7 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
 
     # Upsampling layer for the output of the previous layer conv_1x1_layer7
     deconv_layer3 = tf.layers.conv2d_transpose(Skip_Connection_2, num_classes, 16, strides=(8, 8), padding="SAME",
+                                            kernel_initializer = tf.random_normal_initializer(stddev=weightes_initialization_stdev),
                                                kernel_regularizer=tf.contrib.layers.l2_regularizer(weights_L2_Regularizer),
                                                name="Deconv_layer3")
 
@@ -175,7 +182,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
         loss_log = []
         for image, label in get_batches_fn(batch_size):
             # Prepare the feed_dict that will be used in the sess.run
-            feed_dict = {input_image:image, correct_label:label, keep_prob:0.5, learning_rate:1e-5}
+            feed_dict = {input_image:image, correct_label:label, keep_prob:0.5, learning_rate:0.0001}
             # Run the session based on the previous feed_dict attributes
             _, loss = sess.run([train_op, cross_entropy_loss], feed_dict=feed_dict)
 
